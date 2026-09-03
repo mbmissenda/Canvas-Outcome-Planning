@@ -185,19 +185,35 @@
 
     <div class="step">
       <p class="step-title"><span class="n">2</span> Where is this measured?</p>
-      <p class="step-help tight">This decides which calculation method fits.</p>
+      <p class="step-help tight">This decides which calculation method fits. The dividing line is whether the scores come from one sitting or unfold over time.</p>
       <div class="choices" id="whereChoices">
-        <label class="choice" data-where="single">
-          <input type="radio" name="where" value="single" onchange="onWhere()">
-          <span><span class="c-title">One assignment, measured several times</span>
-          <span class="c-desc">e.g., several quiz items or rubric rows inside a single comprehensive exam.</span></span>
+        <label class="choice" data-where="one_one">
+          <input type="radio" name="where" value="one_one" onchange="onWhere()">
+          <span><span class="c-title">One assignment, one rubric criterion</span>
+          <span class="c-desc">A single score. There's nothing to roll up.</span></span>
         </label>
-        <label class="choice" data-where="multi">
-          <input type="radio" name="where" value="multi" onchange="onWhere()">
-          <span><span class="c-title">Several assignments across a course</span>
-          <span class="c-desc">e.g., scaffolded assignments building toward a final, integrative assessment.</span></span>
+        <label class="choice" data-where="one_multi">
+          <input type="radio" name="where" value="one_multi" onchange="onWhere()">
+          <span><span class="c-title">One assignment, multiple rubric criteria</span>
+          <span class="c-desc">Several scores from one sitting — no time dimension.</span></span>
+        </label>
+        <label class="choice" data-where="quiz_multi">
+          <input type="radio" name="where" value="quiz_multi" onchange="onWhere()">
+          <span><span class="c-title">One quiz, multiple outcomes linked to banks or questions</span>
+          <span class="c-desc">Several aligned items, still one sitting.</span></span>
+        </label>
+        <label class="choice" data-where="course">
+          <input type="radio" name="where" value="course" onchange="onWhere()">
+          <span><span class="c-title">Multiple assignments in a course, one outcome</span>
+          <span class="c-desc">Scaffolded work over time, building toward a final application.</span></span>
+        </label>
+        <label class="choice" data-where="program">
+          <input type="radio" name="where" value="program" onchange="onWhere()">
+          <span><span class="c-title">Multiple assignments across a program, one outcome</span>
+          <span class="c-desc">Measured over time across courses and years.</span></span>
         </label>
       </div>
+      <p class="callout" id="whereNote" style="display:none"></p>
     </div>
 
     <div class="step">
@@ -206,17 +222,17 @@
       <div class="choices" id="methodChoices">
         <label class="choice" data-method="average">
           <input type="radio" name="method" value="average" onchange="sync()">
-          <span><span class="c-title">Average<span class="rec-tag" data-rec="single" hidden>fits your choice</span></span>
+          <span><span class="c-title">Average<span class="rec-tag" hidden>fits your choice</span></span>
           <span class="c-desc">True mean of the aligned scores. Best when one assessment is sampled many times and every sample should count equally.</span></span>
         </label>
         <label class="choice" data-method="decaying">
           <input type="radio" name="method" value="decaying" onchange="sync()">
-          <span><span class="c-title">Decaying / Weighted average (35 / 65)<span class="rec-tag" data-rec="multi" hidden>fits your choice</span></span>
+          <span><span class="c-title">Decaying / Weighted average (35 / 65)<span class="rec-tag" hidden>fits your choice</span></span>
           <span class="c-desc">Most recent score counts 65%, earlier scores 35% combined. Best for scaffolded work ending in a final application — it asks "can they do it <em>now</em>," so a strong build but weak final reads as not-yet-mastered.</span></span>
         </label>
         <label class="choice" data-method="highest">
           <input type="radio" name="method" value="highest" onchange="sync()">
-          <span><span class="c-title">Highest score</span>
+          <span><span class="c-title">Highest score<span class="rec-tag" hidden>fits your choice</span></span>
           <span class="c-desc">Only the best attempt counts. Use for "can they ever demonstrate it" — a capability gate. It hides skill decay and inflates the pass rate, so it's the wrong choice when retention or final application is the point.</span></span>
         </label>
         <label class="choice" data-method="ntimes">
@@ -226,7 +242,7 @@
         </label>
         <label class="choice" data-method="recent">
           <input type="radio" name="method" value="recent" onchange="sync()">
-          <span><span class="c-title">Most recent</span>
+          <span><span class="c-title">Most recent<span class="rec-tag" hidden>fits your choice</span></span>
           <span class="c-desc">Only the latest attempt counts. A pure snapshot of current standing; earlier growth is discarded.</span></span>
         </label>
       </div>
@@ -542,7 +558,13 @@
   };
   const METHOD_SHORT={average:'average',decaying:'recency-weighted',highest:'best-attempt',ntimes:'repeated-demonstration',recent:'most-recent'};
   const METHOD_NAME={average:'Average',decaying:'Decaying / weighted (35 / 65)',highest:'Highest score',ntimes:'n number of times',recent:'Most recent'};
-  const WHERE_NAME={single:'One assignment, sampled several times',multi:'Several assignments across a course'};
+  const WHERE_NAME={
+    one_one:'One assignment, one rubric criterion',
+    one_multi:'One assignment, multiple rubric criteria',
+    quiz_multi:'One quiz, multiple outcomes via banks/questions',
+    course:'Multiple assignments in a course, one outcome',
+    program:'Multiple assignments across a program, one outcome'
+  };
   const ENGINE_NAME={
     classic:'Classic Quizzes — flows to Learning Mastery Gradebook',
     rubric:'Assignment / rubric alignment — flows to Learning Mastery Gradebook',
@@ -570,13 +592,32 @@
     updateRecord();
   }
 
+  const WHERE_METHODS={
+    one_one:['recent','highest','average'],
+    one_multi:['average'],
+    quiz_multi:['average'],
+    course:['decaying'],
+    program:['decaying']
+  };
+  const WHERE_NOTE={
+    one_one:'With a single rubric criterion there\'s just one score, so the roll-up method barely matters — every method returns that same value. Canvas suggests <strong>Most recent</strong> or <strong>Highest</strong>; <strong>Average</strong> also works, with a denominator of 1.',
+    program:'At the program level you\'re comparing across courses and years, so <strong>freezing the ruler</strong> (Step 6) matters most here — a mid-stream change to wording, scale, threshold, or method erases the trend you\'re trying to see.'
+  };
   function onWhere(){
     const where=picked('where');
     document.querySelectorAll('#whereChoices .choice').forEach(c=>c.classList.toggle('sel',c.dataset.where===where));
-    document.querySelectorAll('.rec-tag').forEach(tag=>tag.hidden=tag.dataset.rec!==where);
-    if(!picked('method')){
-      const want=where==='single'?'average':'decaying';
-      const r=document.querySelector(`input[name=method][value=${want}]`);
+    const recs=WHERE_METHODS[where]||[];
+    document.querySelectorAll('#methodChoices .rec-tag').forEach(t=>t.hidden=true);
+    recs.forEach(m=>{
+      const t=document.querySelector('#methodChoices .choice[data-method="'+m+'"] .rec-tag');
+      if(t) t.hidden=false;
+    });
+    const note=$('whereNote');
+    if(WHERE_NOTE[where]){ note.style.display='block'; note.innerHTML=WHERE_NOTE[where]; }
+    else { note.style.display='none'; }
+    // auto-select only when there is a single clear recommendation
+    if(!picked('method') && recs.length===1){
+      const r=document.querySelector('input[name=method][value='+recs[0]+']');
       if(r) r.checked=true;
     }
     sync();
